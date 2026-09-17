@@ -60,7 +60,9 @@ export function formatDeviceInfo(raw: string | null): string | null {
 function prettifyOsArch(part: string): string {
   const lower = part.toLowerCase();
   // Pattern: <os>-<arch>; e.g. darwin-amd64, linux-arm64, windows-amd64.
-  const match = lower.match(/^(darwin|linux|windows|freebsd|openbsd|netbsd)-(amd64|arm64|386|arm)$/);
+  const match = lower.match(
+    /^(darwin|linux|windows|freebsd|openbsd|netbsd)-(amd64|arm64|386|arm)$/,
+  );
   if (!match) return part;
   const os = match[1] ?? "";
   const arch = match[2] ?? "";
@@ -198,27 +200,52 @@ const MODEL_PRICING: Record<
   //    post-intro $3 / $15 rate takes effect. Fable 5 and 5.1 are Mythos-class
   //    SKUs at 10/50 (5.1 prices cache reads at 0.025x input, a quarter of the
   //    usual 0.1x); Opus 4.5 through Opus 5 stay on the lower 5/25 Opus tier. --
-  "claude-sonnet-5":     { input: 2,    output: 10,   cacheRead: 0.20, cacheWrite: 2.50 },
-  "claude-fable-5-1":   { input: 10,   output: 50,   cacheRead: 0.25, cacheWrite: 12.50 },
-  "claude-fable-5":     { input: 10,   output: 50,   cacheRead: 1.00, cacheWrite: 12.50 },
-  "claude-opus-5":      { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-haiku-4-5":   { input: 1,    output: 5,    cacheRead: 0.10, cacheWrite: 1.25 },
-  "claude-sonnet-4-5":  { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
-  "claude-sonnet-4-6":  { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
-  "claude-opus-4-5":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-opus-4-6":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-opus-4-7":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-opus-4-8":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
+  "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  "claude-fable-5-1": {
+    input: 10,
+    output: 50,
+    cacheRead: 0.25,
+    cacheWrite: 12.5,
+  },
+  "claude-fable-5": { input: 10, output: 50, cacheRead: 1.0, cacheWrite: 12.5 },
+  "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+  "claude-sonnet-4-5": {
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
+  },
+  "claude-sonnet-4-6": {
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
+  },
+  "claude-opus-4-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
 
   // -- Anthropic: pre-4.5 Opus (legacy, still served at original price tier) --
-  "claude-opus-4-1":    { input: 15,   output: 75,   cacheRead: 1.50, cacheWrite: 18.75 },
-  "claude-opus-4":      { input: 15,   output: 75,   cacheRead: 1.50, cacheWrite: 18.75 },
+  "claude-opus-4-1": {
+    input: 15,
+    output: 75,
+    cacheRead: 1.5,
+    cacheWrite: 18.75,
+  },
+  "claude-opus-4": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
 
   // -- Anthropic: Sonnet 4.0 (deprecated; same price as the 4.x family) --
-  "claude-sonnet-4":    { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
+  "claude-sonnet-4": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
 
   // -- Anthropic: older Haiku tier (defensive entry for the rare runtime still on it) --
-  "claude-haiku-3-5":   { input: 0.80, output: 4,    cacheRead: 0.08, cacheWrite: 1.00 },
+  "claude-haiku-3-5": {
+    input: 0.8,
+    output: 4,
+    cacheRead: 0.08,
+    cacheWrite: 1.0,
+  },
 
   // -- OpenAI: dotted-minor Codex catalog SKUs. Each generation is priced
   //    independently — no fallback to `gpt-5`. Entries track
@@ -229,29 +256,59 @@ const MODEL_PRICING: Record<
   //    input (see the header note above). Codex usage doesn't yet report
   //    cache-write tokens, so cacheWrite isn't exercised today, but the rate
   //    is kept correct for when it is.
-  "gpt-6-astra":        { input: 10,   output: 50,   cacheRead: 1.00,  cacheWrite: 12.50 },
-  "gpt-5.6-sol":        { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 6.25 },
-  "gpt-5.6-terra":      { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 3.125 },
-  "gpt-5.6-luna":       { input: 1,    output: 6,    cacheRead: 0.10,  cacheWrite: 1.25 },
-  "gpt-5.5":            { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 5 },
-  "gpt-5.4-mini":       { input: 0.75, output: 4.50, cacheRead: 0.075, cacheWrite: 0.75 },
-  "gpt-5.4":            { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 2.50 },
-  "gpt-5.3-codex":      { input: 1.75, output: 14,   cacheRead: 0.175, cacheWrite: 1.75 },
+  "gpt-6-astra": { input: 10, output: 50, cacheRead: 1.0, cacheWrite: 12.5 },
+  "gpt-5.6-sol": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+  "gpt-5.6-terra": {
+    input: 2.5,
+    output: 15,
+    cacheRead: 0.25,
+    cacheWrite: 3.125,
+  },
+  "gpt-5.6-luna": { input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
+  "gpt-5.5": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 5 },
+  "gpt-5.4-mini": {
+    input: 0.75,
+    output: 4.5,
+    cacheRead: 0.075,
+    cacheWrite: 0.75,
+  },
+  "gpt-5.4": { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 2.5 },
+  "gpt-5.3-codex": {
+    input: 1.75,
+    output: 14,
+    cacheRead: 0.175,
+    cacheWrite: 1.75,
+  },
 
   // -- OpenAI: GPT-5 family (Codex CLI's default is gpt-5-codex; -codex/-mini/-nano variants priced per OpenAI tiers) --
-  "gpt-5-codex":        { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 1.25 },
-  "gpt-5-mini":         { input: 0.25, output: 2,    cacheRead: 0.025, cacheWrite: 0.25 },
-  "gpt-5-nano":         { input: 0.05, output: 0.40, cacheRead: 0.005, cacheWrite: 0.05 },
-  "gpt-5":              { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 1.25 },
+  "gpt-5-codex": {
+    input: 1.25,
+    output: 10,
+    cacheRead: 0.125,
+    cacheWrite: 1.25,
+  },
+  "gpt-5-mini": { input: 0.25, output: 2, cacheRead: 0.025, cacheWrite: 0.25 },
+  "gpt-5-nano": {
+    input: 0.05,
+    output: 0.4,
+    cacheRead: 0.005,
+    cacheWrite: 0.05,
+  },
+  "gpt-5": { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 1.25 },
 
   // -- OpenAI: o-series reasoning models --
-  "o3-mini":            { input: 1.10, output: 4.40, cacheRead: 0.55,  cacheWrite: 1.10 },
-  "o3":                 { input: 2,    output: 8,    cacheRead: 0.50,  cacheWrite: 2 },
-  "o4-mini":            { input: 1.10, output: 4.40, cacheRead: 0.275, cacheWrite: 1.10 },
+  "o3-mini": { input: 1.1, output: 4.4, cacheRead: 0.55, cacheWrite: 1.1 },
+  o3: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 2 },
+  "o4-mini": { input: 1.1, output: 4.4, cacheRead: 0.275, cacheWrite: 1.1 },
 
   // -- OpenAI: GPT-4o family (legacy, kept for runtimes still configured against it) --
-  "gpt-4o-mini":        { input: 0.15, output: 0.60, cacheRead: 0.075, cacheWrite: 0.15 },
-  "gpt-4o":             { input: 2.50, output: 10,   cacheRead: 1.25,  cacheWrite: 2.50 },
+  "gpt-4o-mini": {
+    input: 0.15,
+    output: 0.6,
+    cacheRead: 0.075,
+    cacheWrite: 0.15,
+  },
+  "gpt-4o": { input: 2.5, output: 10, cacheRead: 1.25, cacheWrite: 2.5 },
 
   // -- DeepSeek (api-docs.deepseek.com/quick_start/pricing).
   //    The official catalog lists exactly two current SKUs; `deepseek-chat`
@@ -261,38 +318,73 @@ const MODEL_PRICING: Record<
   //    2026-05-31 15:59 UTC; we price at the post-promo standard rate
   //    ($1.74/$3.48) so the dashboard does not jump 4× on June 1 — accept
   //    a brief over-estimate during the promo over a sudden cliff after it. --
-  "deepseek-v4-flash":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
-  "deepseek-v4-pro":    { input: 1.74, output: 3.48, cacheRead: 0.0145, cacheWrite: 1.74 },
-  "deepseek-chat":      { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
-  "deepseek-reasoner":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+  "deepseek-v4-flash": {
+    input: 0.14,
+    output: 0.28,
+    cacheRead: 0.0028,
+    cacheWrite: 0.14,
+  },
+  "deepseek-v4-pro": {
+    input: 1.74,
+    output: 3.48,
+    cacheRead: 0.0145,
+    cacheWrite: 1.74,
+  },
+  "deepseek-chat": {
+    input: 0.14,
+    output: 0.28,
+    cacheRead: 0.0028,
+    cacheWrite: 0.14,
+  },
+  "deepseek-reasoner": {
+    input: 0.14,
+    output: 0.28,
+    cacheRead: 0.0028,
+    cacheWrite: 0.14,
+  },
 
   // -- Moonshot Kimi (kimi.com/resources/kimi-k2-6-pricing).
   //    Only K2.6 is on the official price sheet today; earlier K2 variants
   //    are intentionally omitted until Moonshot publishes their rates. --
-  "kimi-k2.6":          { input: 0.95, output: 4.00, cacheRead: 0.16,   cacheWrite: 0.95 },
+  "kimi-k2.6": { input: 0.95, output: 4.0, cacheRead: 0.16, cacheWrite: 0.95 },
   // Kimi K3 (platform.kimi.ai/docs/pricing/chat-k3 via models.dev
   // providers/moonshotai/models/kimi-k3.toml). Moonshot bills no separate
   // cache write, so cacheWrite mirrors input (same convention as kimi-k2.6).
-  "kimi-k3":            { input: 3.0,  output: 15.0,  cacheRead: 0.30,   cacheWrite: 3.0 },
+  "kimi-k3": { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.0 },
   // Kimi Code CLI reports the same model as `kimi-code/k3`; provider-qualified
   // because `k3` is a generic id (see the provider-qualified keys note above).
-  "kimi/k3":            { input: 3.0,  output: 15.0,  cacheRead: 0.30,   cacheWrite: 3.0 },
+  "kimi/k3": { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.0 },
 
-  // -- Zhipu z.ai (docs.z.ai/guides/overview/pricing). Free flash tiers
-  //    are priced at 0 so they resolve cleanly instead of falling through
-  //    to the "unmapped" diagnostic. --
-  "glm-5.1":            { input: 1.4,  output: 4.4,  cacheRead: 0.26,   cacheWrite: 1.4 },
-  "glm-5":              { input: 1.0,  output: 3.2,  cacheRead: 0.2,    cacheWrite: 1.0 },
-  "glm-5-turbo":        { input: 1.2,  output: 4.0,  cacheRead: 0.24,   cacheWrite: 1.2 },
-  "glm-4.7":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
-  "glm-4.7-flashx":     { input: 0.07, output: 0.4,  cacheRead: 0.01,   cacheWrite: 0.07 },
-  "glm-4.7-flash":      { input: 0,    output: 0,    cacheRead: 0,      cacheWrite: 0 },
-  "glm-4.6":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
-  "glm-4.5":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
-  "glm-4.5-x":          { input: 2.2,  output: 8.9,  cacheRead: 0.45,   cacheWrite: 2.2 },
-  "glm-4.5-air":        { input: 0.2,  output: 1.1,  cacheRead: 0.03,   cacheWrite: 0.2 },
-  "glm-4.5-airx":       { input: 1.1,  output: 4.5,  cacheRead: 0.22,   cacheWrite: 1.1 },
-  "glm-4.5-flash":      { input: 0,    output: 0,    cacheRead: 0,      cacheWrite: 0 },
+  // -- Zhipu z.ai (docs.z.ai/guides/overview/pricing, accessed 2026-09-17).
+  //    GLM-5.3's 1M context is the default tier, so a harness context tag
+  //    (`glm-5.3[1m]`) strips to the base row. Free flash tiers are priced
+  //    at 0 so they resolve cleanly instead of falling through to the
+  //    "unmapped" diagnostic. --
+  "glm-5.3": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
+  "glm-5.3-flash": {
+    input: 0.15,
+    output: 0.5,
+    cacheRead: 0.03,
+    cacheWrite: 0.15,
+  },
+  "glm-5.2": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
+  "glm-5.1": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
+  "glm-5": { input: 1.0, output: 3.2, cacheRead: 0.2, cacheWrite: 1.0 },
+  "glm-5-turbo": { input: 1.2, output: 4.0, cacheRead: 0.24, cacheWrite: 1.2 },
+  "glm-4.7": { input: 0.6, output: 2.2, cacheRead: 0.11, cacheWrite: 0.6 },
+  "glm-4.7-flashx": {
+    input: 0.07,
+    output: 0.4,
+    cacheRead: 0.01,
+    cacheWrite: 0.07,
+  },
+  "glm-4.7-flash": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  "glm-4.6": { input: 0.6, output: 2.2, cacheRead: 0.11, cacheWrite: 0.6 },
+  "glm-4.5": { input: 0.6, output: 2.2, cacheRead: 0.11, cacheWrite: 0.6 },
+  "glm-4.5-x": { input: 2.2, output: 8.9, cacheRead: 0.45, cacheWrite: 2.2 },
+  "glm-4.5-air": { input: 0.2, output: 1.1, cacheRead: 0.03, cacheWrite: 0.2 },
+  "glm-4.5-airx": { input: 1.1, output: 4.5, cacheRead: 0.22, cacheWrite: 1.1 },
+  "glm-4.5-flash": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 
   // -- Alibaba Qwen (International ≤256K tier; official sources:
   //    alibabacloud.com/help/model-studio pricing sheet and
@@ -311,10 +403,15 @@ const MODEL_PRICING: Record<
   //    maas.aliyuncs.com), which does not bill per token — 0 resolves
   //    cleanly instead of tripping the unmapped diagnostic (same convention
   //    as the free GLM flash tiers below). --
-  "qwen3.7-plus":       { input: 0.40,  output: 1.60,  cacheRead: 0.04,   cacheWrite: 0.50 },
-  "qwen3.6-flash":      { input: 0.25,  output: 1.50,  cacheRead: 0.025,  cacheWrite: 0.3125 },
-  "qwen3.8-max":        { input: 2.00,  output: 6.00,  cacheRead: 0.17,   cacheWrite: 2.5 },
-  "qwen3.8-max-preview":{ input: 0,      output: 0,     cacheRead: 0,      cacheWrite: 0 },
+  "qwen3.7-plus": { input: 0.4, output: 1.6, cacheRead: 0.04, cacheWrite: 0.5 },
+  "qwen3.6-flash": {
+    input: 0.25,
+    output: 1.5,
+    cacheRead: 0.025,
+    cacheWrite: 0.3125,
+  },
+  "qwen3.8-max": { input: 2.0, output: 6.0, cacheRead: 0.17, cacheWrite: 2.5 },
+  "qwen3.8-max-preview": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 
   // -- Volcengine Ark (ark.cn-beijing.volces.com). `ark-code-latest` is a
   //    rolling alias whose target the Volcengine console can switch between
@@ -342,13 +439,28 @@ const MODEL_PRICING: Record<
   //    `grok-composer-*` ships in the Grok Build catalog
   //    (server/pkg/agent/models.go) but is absent from the price sheet; it
   //    deliberately stays unmapped rather than inheriting a guessed rate. --
-  "grok-4.6":                     { input: 2,    output: 6,    cacheRead: 0.50, cacheWrite: 2 },
-  "grok-4.5":                     { input: 2,    output: 6,    cacheRead: 0.30, cacheWrite: 2 },
-  "grok-4.3":                     { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-  "grok-build-0.1":               { input: 1,    output: 2,    cacheRead: 0.20, cacheWrite: 1 },
-  "grok-4.20-multi-agent-0309":   { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-  "grok-4.20-0309-reasoning":     { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-  "grok-4.20-0309-non-reasoning": { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
+  "grok-4.6": { input: 2, output: 6, cacheRead: 0.5, cacheWrite: 2 },
+  "grok-4.5": { input: 2, output: 6, cacheRead: 0.3, cacheWrite: 2 },
+  "grok-4.3": { input: 1.25, output: 2.5, cacheRead: 0.2, cacheWrite: 1.25 },
+  "grok-build-0.1": { input: 1, output: 2, cacheRead: 0.2, cacheWrite: 1 },
+  "grok-4.20-multi-agent-0309": {
+    input: 1.25,
+    output: 2.5,
+    cacheRead: 0.2,
+    cacheWrite: 1.25,
+  },
+  "grok-4.20-0309-reasoning": {
+    input: 1.25,
+    output: 2.5,
+    cacheRead: 0.2,
+    cacheWrite: 1.25,
+  },
+  "grok-4.20-0309-non-reasoning": {
+    input: 1.25,
+    output: 2.5,
+    cacheRead: 0.2,
+    cacheWrite: 1.25,
+  },
 
   // -- Cursor Composer / Auto (cursor.com/docs/models-and-pricing,
   //    cursor.com/docs/models/cursor-composer-2,
@@ -361,18 +473,48 @@ const MODEL_PRICING: Record<
   //    runtime model or the legacy key `cursor`. Cursor does not publish a
   //    cache-write rate for these rows; keep it at 0 so reported
   //    cache_write_tokens don't invent spend from input pricing.
-  "cursor/auto":              { input: 1.25, output: 6,    cacheRead: 0.25,   cacheWrite: 0 },
-  "cursor/composer-2.5-fast": { input: 3,    output: 15,   cacheRead: 0.5,    cacheWrite: 0 },
-  "cursor/composer-2.5":      { input: 0.5,  output: 2.5,  cacheRead: 0.2,    cacheWrite: 0 },
-  "cursor/composer-2-fast":   { input: 1.5,  output: 7.5,  cacheRead: 0.35,   cacheWrite: 0 },
-  "cursor/composer-2":        { input: 0.5,  output: 2.5,  cacheRead: 0.2,    cacheWrite: 0 },
-  "cursor/composer-1.5":      { input: 3.5,  output: 17.5, cacheRead: 0.35,   cacheWrite: 0 },
-  "cursor/composer-1":        { input: 1.25, output: 10,   cacheRead: 0.125,  cacheWrite: 0 },
+  "cursor/auto": { input: 1.25, output: 6, cacheRead: 0.25, cacheWrite: 0 },
+  "cursor/composer-2.5-fast": {
+    input: 3,
+    output: 15,
+    cacheRead: 0.5,
+    cacheWrite: 0,
+  },
+  "cursor/composer-2.5": {
+    input: 0.5,
+    output: 2.5,
+    cacheRead: 0.2,
+    cacheWrite: 0,
+  },
+  "cursor/composer-2-fast": {
+    input: 1.5,
+    output: 7.5,
+    cacheRead: 0.35,
+    cacheWrite: 0,
+  },
+  "cursor/composer-2": {
+    input: 0.5,
+    output: 2.5,
+    cacheRead: 0.2,
+    cacheWrite: 0,
+  },
+  "cursor/composer-1.5": {
+    input: 3.5,
+    output: 17.5,
+    cacheRead: 0.35,
+    cacheWrite: 0,
+  },
+  "cursor/composer-1": {
+    input: 1.25,
+    output: 10,
+    cacheRead: 0.125,
+    cacheWrite: 0,
+  },
   // Legacy fallback bucket when neither the result event nor the runtime
   // model is known — the daemon emits the literal `cursor`. This key equals
   // the provider name itself, so it can't collide across providers and stays
   // unqualified. Price at the current Composer 2.5 Fast default.
-  "cursor":                   { input: 3,    output: 15,   cacheRead: 0.5,    cacheWrite: 0 },
+  cursor: { input: 3, output: 15, cacheRead: 0.5, cacheWrite: 0 },
 };
 
 // Resolve a model string to its pricing tier. Exact match, with four
@@ -714,13 +856,17 @@ export function estimateCostBreakdown(usage: Priceable): CostBreakdown {
   // tokens it covers — the row's full tokens minus the estimated ones.
   const shape = {
     input: ((usage.input_tokens - uncosted.input) * pricing.input) / 1_000_000,
-    output: ((usage.output_tokens - uncosted.output) * pricing.output) / 1_000_000,
+    output:
+      ((usage.output_tokens - uncosted.output) * pricing.output) / 1_000_000,
     cacheRead:
-      ((usage.cache_read_tokens - uncosted.cacheRead) * pricing.cacheRead) / 1_000_000,
+      ((usage.cache_read_tokens - uncosted.cacheRead) * pricing.cacheRead) /
+      1_000_000,
     cacheWrite:
-      ((usage.cache_write_tokens - uncosted.cacheWrite) * pricing.cacheWrite) / 1_000_000,
+      ((usage.cache_write_tokens - uncosted.cacheWrite) * pricing.cacheWrite) /
+      1_000_000,
   };
-  const shapeTotal = shape.input + shape.output + shape.cacheRead + shape.cacheWrite;
+  const shapeTotal =
+    shape.input + shape.output + shape.cacheRead + shape.cacheWrite;
   if (shapeTotal <= 0) {
     // Nothing to shape it with (unpriced tokens, or a row carrying cost but no
     // tokens). Keep the money in the total rather than dropping it.
@@ -772,8 +918,13 @@ export function summarizeTaskUsage(
 
   const models: string[] = [];
   const summary: TaskUsageSummary = {
-    tokens: 0, cost: 0, cacheSavings: 0,
-    input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
+    tokens: 0,
+    cost: 0,
+    cacheSavings: 0,
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
     models,
   };
 
@@ -942,7 +1093,10 @@ export function aggregateByDate(usage: RuntimeUsage[]): {
     const modelName = modelGroupingKey(u.model, u.provider);
     const m = modelMap.get(modelName) ?? { tokens: 0, cost: 0 };
     m.tokens +=
-      u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens;
+      u.input_tokens +
+      u.output_tokens +
+      u.cache_read_tokens +
+      u.cache_write_tokens;
     m.cost += estimateCost(u);
     modelMap.set(modelName, m);
   }
@@ -1033,7 +1187,10 @@ export function aggregateByWeek(
   const currentWeekStart = weekStartIso(today);
   const firstWeekStart = addDaysIso(currentWeekStart, -(count - 1) * 7);
 
-  type TokenAgg = Omit<WeeklyTokenData, "label" | "rangeLabel" | "partial" | "daysCovered" | "weekEnd">;
+  type TokenAgg = Omit<
+    WeeklyTokenData,
+    "label" | "rangeLabel" | "partial" | "daysCovered" | "weekEnd"
+  >;
   const tokenMap = new Map<string, TokenAgg>();
   const stackMap = new Map<
     string,
@@ -1083,7 +1240,10 @@ export function aggregateByWeek(
       Math.max(
         1,
         // Day index of `today` within [weekStart, weekEnd] + 1.
-        diffDaysIso(weekStart, today < weekStart ? weekStart : today < weekEnd ? today : weekEnd) + 1,
+        diffDaysIso(
+          weekStart,
+          today < weekStart ? weekStart : today < weekEnd ? today : weekEnd,
+        ) + 1,
       ),
     );
     return {
@@ -1136,9 +1296,7 @@ export function sliceWindow(
   const isoPrev = addDaysIso(today, -days * 2);
   return {
     filtered: usage.filter((u) => u.date >= isoCurrent),
-    prevFiltered: usage.filter(
-      (u) => u.date >= isoPrev && u.date < isoCurrent,
-    ),
+    prevFiltered: usage.filter((u) => u.date >= isoPrev && u.date < isoCurrent),
   };
 }
 
@@ -1232,7 +1390,10 @@ export function aggregateCostByAgent(rows: RuntimeUsageByAgent[]): CostByKey[] {
       taskCount: 0,
     };
     entry.tokens +=
-      r.input_tokens + r.output_tokens + r.cache_read_tokens + r.cache_write_tokens;
+      r.input_tokens +
+      r.output_tokens +
+      r.cache_read_tokens +
+      r.cache_write_tokens;
     entry.cost += estimateCost(r);
     entry.taskCount += r.task_count;
     map.set(r.agent_id, entry);
@@ -1248,7 +1409,10 @@ export function aggregateCostByModel(rows: RuntimeUsage[]): CostByKey[] {
     const key = modelGroupingKey(r.model, r.provider);
     const entry = map.get(key) ?? { key, tokens: 0, cost: 0, taskCount: 0 };
     entry.tokens +=
-      r.input_tokens + r.output_tokens + r.cache_read_tokens + r.cache_write_tokens;
+      r.input_tokens +
+      r.output_tokens +
+      r.cache_read_tokens +
+      r.cache_write_tokens;
     entry.cost += estimateCost(r);
     map.set(key, entry);
   }

@@ -97,6 +97,19 @@ var modelPrices = map[string]ModelPrice{
 	// providers/moonshotai/models/kimi-k3.toml). Moonshot bills no separate
 	// cache write, so CacheWritePerM mirrors Input.
 	"moonshotai:kimi-k3": {Provider: "moonshotai", Model: "kimi-k3", InputPerM: 3.0, CacheReadPerM: 0.30, CacheWritePerM: 3.0, OutputPerM: 15.0},
+	// Zhipu GLM 5.x (docs.z.ai/guides/overview/pricing, accessed 2026-09-17;
+	// CNY list prices at docs.bigmodel.cn/cn/guide/start/pricing — GLM-5.3 is
+	// ¥8 / ¥28 per M with ¥2 cache hit, GLM-5.3-Flash ¥0.8 / ¥2.8 / ¥0.23).
+	// GLM-5.3's 1M context is the default tier, so a harness context tag
+	// (`glm-5.3[1m]`) strips to the base row via PriceForModelAlias. Zhipu
+	// bills no separate cache write, so CacheWritePerM mirrors Input (same
+	// convention as Moonshot). Mirror packages/views/runtimes/utils.ts.
+	"zhipu:glm-5.3":       {Provider: "zhipu", Model: "glm-5.3", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+	"zhipu:glm-5.3-flash": {Provider: "zhipu", Model: "glm-5.3-flash", InputPerM: 0.15, CacheReadPerM: 0.03, CacheWritePerM: 0.15, OutputPerM: 0.50},
+	"zhipu:glm-5.2":       {Provider: "zhipu", Model: "glm-5.2", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+	"zhipu:glm-5.1":       {Provider: "zhipu", Model: "glm-5.1", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+	"zhipu:glm-5-turbo":   {Provider: "zhipu", Model: "glm-5-turbo", InputPerM: 1.20, CacheReadPerM: 0.24, CacheWritePerM: 1.20, OutputPerM: 4.00},
+	"zhipu:glm-5":         {Provider: "zhipu", Model: "glm-5", InputPerM: 1.00, CacheReadPerM: 0.20, CacheWritePerM: 1.00, OutputPerM: 3.20},
 	// Volcengine Ark (ark.cn-beijing.volces.com). `ark-code-latest` is a
 	// rolling alias whose target can be switched in the Volcengine console
 	// (across model families), so it is not a stable model identity; the
@@ -201,6 +214,16 @@ var modelAliasRules = []struct {
 	// unmapped; `kimi-code/k3` (Kimi Code CLI) resolves via the `/k3$` form.
 	{regexp.MustCompile(`(^|/|:)kimi-k3$`), "moonshotai:kimi-k3"},
 	{regexp.MustCompile(`(^|/|:)k3$`), "moonshotai:kimi-k3"},
+	// Zhipu GLM 5.x. Anchored with the same optional complete bracket tag as
+	// the Qwen rows so `glm-5.3[1m]` (Claude Code appends the context tag;
+	// GLM-5.3's default tier IS 1M, so the tag carries no price change)
+	// resolves while unknown suffixed variants stay unmapped.
+	{regexp.MustCompile(`(^|/|:)glm-5[.]3-flash(\[[^\]]+\])?$`), "zhipu:glm-5.3-flash"},
+	{regexp.MustCompile(`(^|/|:)glm-5[.]3(\[[^\]]+\])?$`), "zhipu:glm-5.3"},
+	{regexp.MustCompile(`(^|/|:)glm-5[.]2(\[[^\]]+\])?$`), "zhipu:glm-5.2"},
+	{regexp.MustCompile(`(^|/|:)glm-5[.]1(\[[^\]]+\])?$`), "zhipu:glm-5.1"},
+	{regexp.MustCompile(`(^|/|:)glm-5-turbo(\[[^\]]+\])?$`), "zhipu:glm-5-turbo"},
+	{regexp.MustCompile(`(^|/|:)glm-5(\[[^\]]+\])?$`), "zhipu:glm-5"},
 	// Volcengine Ark `ark-code-latest` is deliberately absent: it is a
 	// console-switchable rolling alias across model families, not a stable
 	// model identity, so it stays unmapped.

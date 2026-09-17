@@ -289,6 +289,71 @@ func TestPriceForModelAliasAlibabaMoonshotVolcengine(t *testing.T) {
 	}
 }
 
+// TestPriceForModelAliasZhipuGLM covers the GLM 5.x rows: case drift
+// (claude-compat endpoints report `GLM-5` uppercase; the resolver lowercases
+// at entry), the `[1m]` context tag GLM-5.3 carries by default (same SKU at
+// the same tier), and the flash SKU staying on its own row.
+func TestPriceForModelAliasZhipuGLM(t *testing.T) {
+	cases := []struct {
+		model string
+		want  ModelPrice
+	}{
+		{
+			model: "glm-5.3",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5.3", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+		},
+		{
+			// Claude Code appends the context tag; the 1M tier is GLM-5.3's
+			// default, so the tag carries no price change.
+			model: "glm-5.3[1m]",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5.3", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+		},
+		{
+			// Mixed-case tag form seen in usage rows.
+			model: "glm-5.3[1M]",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5.3", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+		},
+		{
+			// claude-compat endpoint reports the id uppercase.
+			model: "GLM-5",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5", InputPerM: 1.00, CacheReadPerM: 0.20, CacheWritePerM: 1.00, OutputPerM: 3.20},
+		},
+		{
+			model: "glm-5.3-flash",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5.3-flash", InputPerM: 0.15, CacheReadPerM: 0.03, CacheWritePerM: 0.15, OutputPerM: 0.50},
+		},
+		{
+			model: "glm-5.2",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5.2", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+		},
+		{
+			model: "zhipu:glm-5.1",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5.1", InputPerM: 1.40, CacheReadPerM: 0.26, CacheWritePerM: 1.40, OutputPerM: 4.40},
+		},
+		{
+			model: "glm-5-turbo",
+			want:  ModelPrice{Provider: "zhipu", Model: "glm-5-turbo", InputPerM: 1.20, CacheReadPerM: 0.24, CacheWritePerM: 1.20, OutputPerM: 4.00},
+		},
+	}
+
+	for _, tc := range cases {
+		got, ok := PriceForModelAlias(tc.model)
+		if !ok {
+			t.Fatalf("PriceForModelAlias(%q) did not resolve", tc.model)
+		}
+		if got != tc.want {
+			t.Fatalf("PriceForModelAlias(%q) = %+v, want %+v", tc.model, got, tc.want)
+		}
+	}
+
+	// Unknown suffixed variants must not borrow a GLM tier.
+	for _, unmapped := range []string{"glm-5.3-pro", "glm-5.4", "glm-5.3-flash-x"} {
+		if _, ok := PriceForModelAlias(unmapped); ok {
+			t.Fatalf("PriceForModelAlias(%q) resolved but should stay unmapped", unmapped)
+		}
+	}
+}
+
 // TestPriceForModelAliasNoFalseBorrowing guards the anchored rules: a preview
 // SKU must not inherit the GA tier, a distinct CodeBuddy SKU must not inherit
 // Kimi K3, unknown suffixed variants must stay unmapped, empty bracket tags
