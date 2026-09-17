@@ -44,6 +44,21 @@ const (
 	// missing first model token and a stalled response stream. The generic
 	// AgentIdleWatchdog remains the global enable/disable switch.
 	DefaultOpenCodeIdleWatchdog = 10 * time.Minute
+	// DefaultClaudeIdleWatchdog narrows the no-message budget for Claude runs
+	// while no tool is in flight. Claude Code through a claude-compat endpoint
+	// (e.g. GLM) can hang indefinitely on a model request that the endpoint
+	// never answers — the CLI has no request-level timeout, so the run sits
+	// silent until the generic 2h AgentIdleWatchdog fires and burns a
+	// concurrency slot for nothing. A healthy Claude run without an in-flight
+	// tool stays quiet only while the model is composing one message, which is
+	// minutes in practice for the serial, handoff-driven team workflows this
+	// daemon drives (long builds/tests run as tool calls and keep the larger
+	// AgentToolWatchdog budget). 30 minutes follows DefaultOpenCodeIdleWatchdog's
+	// precedent of sizing for the legitimate silent step, and
+	// MULTICA_CLAUDE_IDLE_WATCHDOG=0 removes the override entirely for
+	// deployments whose agents do emit RFC-length single messages or drive
+	// long-running CLI subagents (the MUL-2300 shape the 2h global covers).
+	DefaultClaudeIdleWatchdog = 30 * time.Minute
 	// DefaultAgentIdleWatchdog is the per-task safety net that force-stops a
 	// run when the backend has emitted no message for this long AND its
 	// message queue is empty. Backends like Claude Code can hang indefinitely
@@ -150,6 +165,7 @@ type Config struct {
 	CodexTurnInterruptTimeout   time.Duration
 	CodexThreadHandshakeTimeout time.Duration
 	OpenCodeIdleWatchdog        time.Duration // OpenCode-specific no-message window; 0 falls back to AgentIdleWatchdog and values above it cannot extend the global bound
+	ClaudeIdleWatchdog          time.Duration // Claude-specific no-message window (compat-endpoint hangs); same fallback semantics as OpenCodeIdleWatchdog
 	AgentIdleWatchdog           time.Duration // force-stop a run when the backend goes silent this long with an empty queue (0 = disabled)
 	AgentToolWatchdog           time.Duration // force-stop a run when a single tool call stays in flight (silent) this long (0 = never force-stop during a tool call, which now also covers a live Cursor background shell); defaults to AgentIdleWatchdog, so operators tune one number unless they deliberately want a wider tool budget
 	ClaudeArgs                  []string
@@ -343,6 +359,17 @@ func LoadConfig(overrides Overrides) (Config, error) {
 	// cannot extend the global bound, and the global zero still disables the
 	// whole mechanism.
 	openCodeIdleWatchdog, err := durationFromEnv("MULTICA_OPENCODE_IDLE_WATCHDOG", DefaultOpenCodeIdleWatchdog)
+	if err != nil {
+		return Config{}, err
+	}
+
+	// MULTICA_CLAUDE_IDLE_WATCHDOG narrows the no-message window for Claude
+	// runs against claude-compat endpoints that can drop a model request
+	// without answering. Same semantics as the OpenCode override above: zero
+	// removes the provider-specific budget and falls back to
+	// MULTICA_AGENT_IDLE_WATCHDOG, positive values cannot extend the global
+	// bound, and the global zero still disables the whole mechanism.
+	claudeIdleWatchdog, err := durationFromEnv("MULTICA_CLAUDE_IDLE_WATCHDOG", DefaultClaudeIdleWatchdog)
 	if err != nil {
 		return Config{}, err
 	}
@@ -660,6 +687,7 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		CodexTurnInterruptTimeout:       codexTurnInterruptTimeout,
 		CodexThreadHandshakeTimeout:     codexThreadHandshakeTimeout,
 		OpenCodeIdleWatchdog:            openCodeIdleWatchdog,
+		ClaudeIdleWatchdog:              claudeIdleWatchdog,
 		AgentIdleWatchdog:               agentIdleWatchdog,
 		AgentToolWatchdog:               agentToolWatchdog,
 		ClaudeArgs:                      claudeArgs,
