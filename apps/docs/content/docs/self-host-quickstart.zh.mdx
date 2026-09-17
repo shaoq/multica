@@ -94,9 +94,29 @@ Backend 容器每次启动时都会先运行数据库 migration，再启动服�
 
 直接打开 [http://localhost:3000P172。后面运行 `multica setup self-host` 时也不需要传 URL。
 
+### 同一 Wi-Fi 下的手机访问
+
+在 macOS 上执行 `scutil --get LocalHostName` 获取稳定的 Bonjour 名称，再追加 `.local`，不要继续使用可能变化的 Wi-Fi IP。例如命令输出 `your-mac` 时，在 `.env` 中设置：
+
+```bash
+MULTICA_BIND_ADDRESS=0.0.0.0
+FRONTEND_ORIGIN=http://your-mac.local:3000
+CORS_ALLOWED_ORIGINS=http://your-mac.local:3000
+NEXT_PUBLIC_API_URL=
+NEXT_PUBLIC_WS_URL=
+```
+
+从当前 checkout 构建 Backend/Web 并启动：
+
+```bash
+make selfhost-build
+```
+
+确保手机和 Mac 连接同一个可信 Wi-Fi，然后在 Safari 中打开 `http://your-mac.local:3000`。浏览器的 HTTP 和 WebSocket 都使用前端同源代理，因此两个 public URL 配置保持为空。原生 iOS 客户端后续可将 `http://your-mac.local:8080` 作为 Backend Base URL。PostgreSQL 仍不会对局域网开放。`0.0.0.0` 会在 Mac 的所有网络接口发布 Web 和 Backend 端口，因此只应在可信网络使用、保持 macOS 防火墙开启，并且不要配置路由器端口转发。
+
 ### 远程访问
 
-Docker Compose 默认只把 `3000` 和 `8080` 绑定到 `127.0.0.1`。不要直接改成 `0.0.0.0` 暴露到公网；使用带 HTTPS 的反向代理。
+Docker Compose 默认只把 `3000` 和 `8080` 绑定到 `127.0.0.1`。上面的可信局域网方案会有意改为 `0.0.0.0`；不要通过路由器将这些端口暴露到公网。远程访问时应恢复 loopback 绑定，并使用带 HTTPS 的反向代理。
 
 下面以两个域名为例：
 

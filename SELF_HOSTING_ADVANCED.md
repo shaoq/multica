@@ -553,41 +553,50 @@ This keeps cookies, CORS, and the WebSocket origin check on a single origin. It 
 
 ## LAN / Non-localhost Access
 
-By default, Multica works on `localhost`. If you access it from another machine on the LAN (e.g. `http://192.168.1.100:3000`), you need to tell the backend to accept that origin:
+By default, Multica publishes Backend/Web on `127.0.0.1`. On macOS, a trusted-LAN deployment can avoid DHCP address churn by publishing on all host interfaces and using the Mac's stable Bonjour name. Run `scutil --get LocalHostName`, append `.local`, and allow that browser origin:
 
 ```bash
-# .env — replace with your server's LAN IP
-FRONTEND_ORIGIN=http://192.168.1.100:3000
-CORS_ALLOWED_ORIGINS=http://192.168.1.100:3000
+# .env — replace your-mac with the LocalHostName reported by macOS
+MULTICA_BIND_ADDRESS=0.0.0.0
+FRONTEND_ORIGIN=http://your-mac.local:3000
+CORS_ALLOWED_ORIGINS=http://your-mac.local:3000
+NEXT_PUBLIC_API_URL=
+NEXT_PUBLIC_WS_URL=
 ```
 
-Then restart the stack:
+Keep both public URL overrides empty so browser HTTP and WebSocket traffic use the frontend's same-origin runtime proxy. A native client that needs the Backend directly can use `http://your-mac.local:8080`. Publishing on `0.0.0.0` exposes the raw Web and Backend ports on every host interface, so use it only on a trusted network, keep the host firewall enabled, and never combine it with router port forwarding. PostgreSQL remains unpublished.
+
+To build Backend/Web from the current checkout and recreate the stack with these values:
 
 ```bash
-docker compose -f docker-compose.selfhost.yml up -d
+make selfhost-build
 ```
+
+If the Backend image cannot reach the official Go module proxy, set a trusted reachable proxy for the source build and retry, for example `GOPROXY=https://goproxy.cn,direct make selfhost-build`. If Google Fonts is unavailable while building Web, also set a trusted mirror that implements the Google Fonts `/css2` API, for example `NEXT_FONT_GOOGLE_MIRROR=https://fonts.loli.net`. Published images do not use either setting.
+
+Then open `http://your-mac.local:3000` on the other device. If macOS prompts whether Docker may accept incoming connections, allow it for the current trusted network.
 
 ### WebSocket for LAN / Non-localhost Access
 
-HTTP requests (Plugin API, issues, comments, uploads) work on LAN out of the box — Next.js rewrites proxy `/v1`, `/api`, `/auth`, and `/uploads` to the backend. **WebSockets do not**: Next.js rewrites only forward HTTP requests, not the `Upgrade` handshake a WebSocket needs. If you open the app on `http://<lan-ip>:3000`, real-time features (chat streaming, live issue updates, notifications) will fail to connect until you do one of the following:
+HTTP requests (Plugin API, issues, comments, uploads) and WebSockets work through the frontend's same-origin runtime proxy. With `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` empty, the browser derives `/api` and `/ws` from the page origin, so an IP change does not get baked into the client.
 
-1. **Put a reverse proxy in front of the stack (recommended).** Nginx or Caddy terminates the WebSocket upgrade and forwards it to the backend on port 8080. See the [Reverse Proxy](#reverse-proxy) section above — the Nginx example already includes a `location /ws { ... }` block with the correct `Upgrade` / `Connection` headers. Once a proxy is in place the browser connects directly through it, so no frontend rebuild is needed.
+For a public deployment, put a reverse proxy in front of the stack. Nginx or Caddy terminates the WebSocket upgrade and forwards it to the backend on port 8080. See the [Reverse Proxy](#reverse-proxy) section above — the Nginx example already includes a `location /ws { ... }` block with the correct `Upgrade` / `Connection` headers.
 
-2. **Bake a WebSocket URL into the web image.** If you are not running a reverse proxy, rebuild the web image with `NEXT_PUBLIC_WS_URL` pointing straight at the backend (port 8080 must be reachable from the browser):
+Set a direct WebSocket URL only when the frontend proxy is intentionally bypassed:
 
    ```bash
    # In .env
-   NEXT_PUBLIC_WS_URL=ws://<lan-ip>:8080/ws
+   NEXT_PUBLIC_WS_URL=ws://your-mac.local:8080/ws
 
-   # Rebuild the web image so the build-time value is baked in
-   docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build
+   # Recreate the frontend so its runtime environment is refreshed
+   docker compose -f docker-compose.selfhost.yml up -d
    ```
 
-   `NEXT_PUBLIC_WS_URL` is a build-time variable (see `Dockerfile.web`), so setting it only in `environment:` on the pre-built image has no effect — you must use the `selfhost.build.yml` override that rebuilds the image.
+   The frontend resolves `NEXT_PUBLIC_WS_URL` while rendering the app. Recreate the container after changing `.env`; `docker compose restart` does not reload environment variables.
 
-**Also required: allowlist the browser origin.** The two options above fix the WebSocket *upgrade proxying*, but a second, independent setting gates the connection: the backend validates the WebSocket `Origin` header against an allowlist that defaults to `localhost` only. When you open Multica from any other origin — a LAN IP **or a public domain behind a reverse proxy** — set `CORS_ALLOWED_ORIGINS` (or `FRONTEND_ORIGIN`) on the backend to that exact origin and restart, exactly as shown under [LAN / Non-localhost Access](#lan--non-localhost-access) above. Otherwise the upgrade is refused with `403`: the backend logs `websocket: request origin not allowed by Upgrader.CheckOrigin` and the browser console loops `disconnected, reconnecting in 3s`, while HTTP requests (and manual page refreshes) keep working because they are same-origin to the page. The single value covers both HTTP CORS and the WebSocket origin check.
+**The browser origin must still be allowlisted.** The backend validates the WebSocket `Origin` header against an allowlist that defaults to `localhost` only. When you open Multica from any other origin — a `.local` name, LAN IP, or public domain — set `CORS_ALLOWED_ORIGINS` (or `FRONTEND_ORIGIN`) to that exact origin and recreate the Backend. Otherwise the upgrade is refused with `403`. The single value covers both HTTP CORS and the WebSocket origin check.
 
-> **Note:** If you need to hard-code a different public API / WebSocket endpoint into the web image for any other reason, use the same source-build override: `docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build`.
+> **Note:** To verify Backend/Web changes from the current checkout, use `make selfhost-build`. The normal `make selfhost` command pulls published images instead.
 
 ## Health Check
 

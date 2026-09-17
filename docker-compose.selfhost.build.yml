@@ -4,6 +4,11 @@
 services:
   backend:
     image: multica-backend:dev
+    ports:
+      # Stable loopback endpoint for the Desktop app. Keep this separate from
+      # the LAN-bound port in docker-compose.selfhost.yml so Wi-Fi address
+      # changes do not break the local daemon connection.
+      - "127.0.0.1:${MULTICA_DESKTOP_BACKEND_PORT:-18080}:8080"
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,11 +16,15 @@ services:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
         DATE: ${DATE:-unknown}
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
 
   frontend:
     image: multica-web:dev
+    ports:
+      - "127.0.0.1:${MULTICA_DESKTOP_FRONTEND_PORT:-13000}:3000"
     build:
       context: .
       dockerfile: Dockerfile.web
       args:
         NEXT_PUBLIC_APP_VERSION: dev
+        NEXT_FONT_GOOGLE_MIRROR: ${NEXT_FONT_GOOGLE_MIRROR:-}

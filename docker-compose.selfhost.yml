@@ -1,11 +1,12 @@
 # Self-hosting Docker Compose — starts PostgreSQL, backend, and frontend.
 #
-# Services bind to 127.0.0.1 only. For cross-machine or public access, front
-# them with a reverse proxy (Caddy / nginx / Cloudflare Tunnel) that terminates
-# TLS and forwards to 127.0.0.1:8080 (backend) and 127.0.0.1:3000 (frontend).
-# Do NOT change these bindings to 0.0.0.0 — Docker bypasses host firewalls
-# (UFW/iptables) by default, so the raw ports would be exposed to the internet
-# while any deployment credentials remain weak. See:
+# Services bind to 127.0.0.1 by default. For stable access from a trusted LAN
+# when DHCP addresses may change, set MULTICA_BIND_ADDRESS to 0.0.0.0 and use
+# the host's Bonjour/mDNS name (for example your-mac.local). This publishes the
+# raw Web and Backend ports on every host interface: keep the host firewall
+# enabled and do not add router port forwarding. For public access, keep the
+# loopback default and use a reverse proxy (Caddy / nginx / Cloudflare Tunnel)
+# that terminates TLS. See:
 #   apps/docs/content/docs/self-host-quickstart.mdx
 #
 # Usage:
@@ -13,8 +14,8 @@
 #   # Edit .env — generate JWT_SECRET with `openssl rand -hex 32` (required)
 #   docker compose -f docker-compose.selfhost.yml up -d
 #
-# Frontend: http://localhost:${FRONTEND_PORT:-3000}
-# Backend:  http://localhost:${BACKEND_PORT:-${API_PORT:-${SERVER_PORT:-${PORT:-8080}}}}
+# Frontend: http://${MULTICA_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-3000}
+# Backend:  http://${MULTICA_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-${API_PORT:-${SERVER_PORT:-${PORT:-8080}}}}
 #
 # The published values above are HOST ports; the containers always listen on
 # 8080 / 3000 internally, so changing them never needs a rebuild. PORT is the
@@ -58,7 +59,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${BACKEND_PORT:-${API_PORT:-${SERVER_PORT:-${PORT:-8080}}}}:8080"
+      - "${MULTICA_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-${API_PORT:-${SERVER_PORT:-${PORT:-8080}}}}:8080"
     volumes:
       - backend_uploads:/app/data/uploads
     environment:
@@ -209,7 +210,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+      - "${MULTICA_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-3000}:3000"
     environment:
       HOSTNAME: "0.0.0.0"
       REMOTE_API_URL: ${REMOTE_API_URL:-http://backend:8080}

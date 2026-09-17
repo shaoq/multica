@@ -94,9 +94,29 @@ The backend container runs database migrations on every startup before serving; 
 
 Open [http://localhost:3000](http://localhost:3000) directly. You also won't need to pass any URLs when running `multica setup self-host` later.
 
+### Access from another device on the same Wi-Fi
+
+On macOS, get the stable Bonjour name with `scutil --get LocalHostName`, append `.local`, and use it instead of the changing Wi-Fi address. For example, if the command prints `your-mac`, set:
+
+```bash
+MULTICA_BIND_ADDRESS=0.0.0.0
+FRONTEND_ORIGIN=http://your-mac.local:3000
+CORS_ALLOWED_ORIGINS=http://your-mac.local:3000
+NEXT_PUBLIC_API_URL=
+NEXT_PUBLIC_WS_URL=
+```
+
+Build Backend/Web from the current checkout and start the stack:
+
+```bash
+make selfhost-build
+```
+
+Connect the phone and Mac to the same trusted Wi-Fi, then open `http://your-mac.local:3000` in Safari. Browser HTTP and WebSocket traffic use the frontend's same-origin proxy, so both public URL overrides stay empty. A native iOS client can use `http://your-mac.local:8080` as its Backend base URL. PostgreSQL remains unpublished. `0.0.0.0` exposes the raw Web and Backend ports on every Mac interface, so keep the macOS firewall enabled, use this only on a trusted network, and do not configure router port forwarding.
+
 ### Remote access
 
-Docker Compose binds `3000` and `8080` to `127.0.0.1` only. Do not switch this to `0.0.0.0` to expose the ports to the public internet; use a reverse proxy with HTTPS instead.
+Docker Compose binds `3000` and `8080` to `127.0.0.1` by default. The trusted-LAN setup above deliberately switches to `0.0.0.0`; do not expose those ports through the router or use that setup as a public deployment. For internet access, return to loopback binding and use a reverse proxy with HTTPS instead.
 
 The example below uses two domains:
 

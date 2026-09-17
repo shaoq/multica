@@ -53,11 +53,17 @@ compose_host_port() {
 backend_port=$(compose_host_port backend 8080 "${BACKEND_PORT:-${API_PORT:-${SERVER_PORT:-${PORT:-8080}}}}")
 frontend_port=$(compose_host_port frontend 3000 "${FRONTEND_PORT:-3000}")
 
-backend_url="http://localhost:${backend_port}"
-frontend_url="http://localhost:${frontend_port}"
+bind_address=${MULTICA_BIND_ADDRESS:-127.0.0.1}
+case "$bind_address" in
+127.0.0.1 | 0.0.0.0) access_host=localhost ;;
+*) access_host=$bind_address ;;
+esac
+
+backend_url="http://${access_host}:${backend_port}"
+frontend_url="http://${access_host}:${frontend_port}"
 
 health_ok() {
-  curl -sf "${backend_url}/health" >/dev/null 2>&1
+  curl --noproxy '*' -sf "${backend_url}/health" >/dev/null 2>&1
 }
 
 echo "==> Waiting for backend to be ready..."
