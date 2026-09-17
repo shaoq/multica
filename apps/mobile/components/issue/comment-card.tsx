@@ -1,13 +1,10 @@
 /**
- * Comment timeline row. Rounded gray bubble containing the parent comment
- * plus, when applicable, every descendant reply stacked inline. The bubble
- * boundary itself is the thread indicator — no "↪ Replying to" header, no
- * recursive indentation. This matches the user's design call: "放在一个 card
- * 内部就行了 / no need for the Replying to label".
+ * One persisted comment row in the globally chronological timeline. Replies
+ * remain independent bubbles and carry a compact, tappable direct-parent
+ * reference so chronology and conversation context are both visible.
  *
- * Mobile flat-list rule (apps/mobile/CLAUDE.md): same comments as web,
- * different layout — web shows recursive tree, mobile shows one bubble per
- * thread. Counts agree (no comment is dropped or duplicated).
+ * Mobile flat-list rule (apps/mobile/CLAUDE.md): the persisted row sequence
+ * matches web/desktop; mobile uses one touch-friendly bubble per row.
  *
  * Interaction: long-press inside a bubble fires a native iOS
  * `ActionSheetIOS` with the comment's actions (Reply, React…, Copy,
@@ -15,14 +12,10 @@
  * the targeted bubble's border highlights. See `useCommentLongPress` in
  * `./comment-context-menu.tsx`.
  *
- * Resolved threads render in a collapsed `<ResolvedThreadBar>` by default —
- * mirrors the same state language web uses (`packages/views/issues/
- * components/resolved-thread-bar.tsx`), but the visual is a single-line
- * tap-to-expand bar at iOS section-row scale. Tap expands the bar in place;
- * when expanded the resolved indicator stays at the top of the body so the
- * user keeps the "this thread is resolved" signal even while reading.
+ * Resolution is row metadata, not a visibility rule: resolved content remains
+ * readable and receives only a light visual treatment.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -33,10 +26,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import type { Reaction, TimelineEntry } from "@multica/core/types";
-import {
-  commentLandingTarget,
-  isDeletedComment,
-} from "@multica/core/issues/comment-deletion";
+import { isDeletedComment } from "@multica/core/issues/comment-deletion";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorLookup } from "@/data/use-actor-name";
@@ -56,16 +46,16 @@ import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import { continuousCorners } from "@/lib/radius";
 import { ReactionBar } from "./reaction-bar";
 import { useCommentLongPress } from "./comment-context-menu";
 import { useCommentSelectStore } from "@/data/comment-select-store";
+import { stripMarkdown } from "@/lib/strip-markdown";
 
 interface Props {
   entry: TimelineEntry;
-  /** Flattened descendant replies. Rendered inline below the parent inside
-   *  the same bubble, separated by a hairline divider. */
-  replies?: TimelineEntry[];
+  parentEntry?: TimelineEntry | null;
+  parentUnavailable?: boolean;
+  onNavigateToParent?: (commentId: string) => void;
   /** Plumbed through so each CommentBody can wire its reaction toggle to
    *  the correct issue's mutation key. */
   issueId: string;
@@ -73,86 +63,46 @@ interface Props {
    *  web URL for the long-press "Copy Link" item. Optional — that item
    *  hides when missing. */
   issueIdentifier: string | undefined;
-  /** Inbox deep-link flash target. When this matches the root entry id we
-   *  flash the outer bubble (ring + bg). When it matches a reply id we
-   *  flash that reply's wrapper (bg only). Mirrors web's distinction at
-   *  packages/views/issues/components/comment-card.tsx:498-682. */
+  /** Inbox deep-link flash target for this independent row. */
   highlightedCommentId?: string | null;
 }
 
 export function CommentCard({
   entry,
-  replies = [],
+  parentEntry,
+  parentUnavailable = false,
+  onNavigateToParent,
   issueId,
   issueIdentifier,
   highlightedCommentId,
 }: Props) {
-  // Resolved threads default to a single-line bar; tap expands in place for
-  // the current session. Unmount (scroll out of viewport) resets — same
-  // behavior as iOS Mail's "tap to expand a thread" pattern. Replies cannot
-  // themselves be resolved (server enforces root-only), so the resolved flag
-  // on the root is the single source of truth for this card.
   const resolved = !!entry.resolved_at;
-  const [expanded, setExpanded] = useState(false);
   // Highlight ring while a long-press action sheet is on screen — child
   // CommentBody flips this via onPressChange so the outer bubble shell can
   // visually bind the sheet to the targeted entry.
   const [pressedEntryId, setPressedEntryId] = useState<string | null>(null);
-  const handlePressChange = useCallback(
-    (entryId: string, pressed: boolean) => {
-      setPressedEntryId((cur) => {
-        if (pressed) return entryId;
-        return cur === entryId ? null : cur;
-      });
-    },
-    [],
-  );
-  const isHighlighted =
-    pressedEntryId === entry.id ||
-    replies.some((r) => r.id === pressedEntryId);
+  const handlePressChange = useCallback((entryId: string, pressed: boolean) => {
+    setPressedEntryId((cur) => {
+      if (pressed) return entryId;
+      return cur === entryId ? null : cur;
+    });
+  }, []);
+  const isHighlighted = pressedEntryId === entry.id;
   // Translucent primary-tinted background while ANY body inside this card
   // is in text-selection mode. Subtle visual cue that replaces the prior
   // Done pill — exit is via scroll / tab switch / selecting another body.
   const selectingId = useCommentSelectStore((s) => s.selectingId);
-  const isSelectingHere =
-    selectingId === entry.id || replies.some((r) => r.id === selectingId);
+  const isSelectingHere = selectingId === entry.id;
 
-  // Inbox deep-link target inside a resolved thread expands automatically —
-  // otherwise tapping a notification would just reveal a bar with no content
-  // and force the user to tap again.
-  useEffect(() => {
-    if (!resolved || !highlightedCommentId) return;
-    if (
-      highlightedCommentId === entry.id ||
-      replies.some((r) => r.id === highlightedCommentId)
-    ) {
-      setExpanded(true);
-    }
-  }, [resolved, highlightedCommentId, entry.id, replies]);
-
-  const visibleReplies = replies.filter((reply) => !isDeletedComment(reply));
-  // A deleted reply renders nothing, so a notification pointing at one has no
-  // row to flash. Flash the comment just above where it was instead — the
-  // expansion above still keys off the original id, which is in this thread
-  // either way. Web does the same in its deep-link effect
-  // (packages/views/issues/components/issue-detail.tsx).
-  const highlightId = highlightedCommentId
-    ? commentLandingTarget(highlightedCommentId, entry.id, replies)
-    : highlightedCommentId;
-
-  if (resolved && !expanded) {
-    return (
-      <ResolvedThreadBar
-        entry={entry}
-        replies={replies}
-        onExpand={() => setExpanded(true)}
-      />
-    );
-  }
+  // A deleted comment renders nothing in the flat timeline: the server keeps
+  // its row only as a tombstone so its replies keep a direct parent (#8296),
+  // and every reply renders flat where it was. Kept after all hooks so a row
+  // transitioning to deleted mid-flight does not change the hook count.
+  if (isDeletedComment(entry)) return null;
 
   return (
     <View className="px-4">
-      <View className="rounded-xl" style={continuousCorners}>
+      <View className="rounded-2xl">
         {/* Bubble uses `surface-1` (L 98%) — extremely subtle elevation
          *  above the page, visible mostly through the rounded edge rather
          *  than the fill (iOS settings cell feel; see Refactoring UI #4
@@ -163,23 +113,29 @@ export function CommentCard({
          *  Border (L 84%) adds 6% on top for the outline. See global.css
          *  for the full 5-tier elevation scale.
          *
-         *  Resolved-and-expanded path dims the bubble to 70% so the
-         *  "this is settled" signal persists even while reading the
-         *  body — mirrors web's muted resolved card visual. */}
+         *  Resolved rows use a light muted fill while preserving normal text
+         *  contrast and the full readable body. */}
         <View
           className={cn(
-            "bg-surface-1 rounded-xl px-4 py-3 gap-3 border-2 border-transparent transition-colors",
-            resolved && "opacity-70",
+            "bg-surface-1 rounded-2xl px-4 py-3 gap-3 border-2 border-transparent transition-colors",
+            resolved && "bg-muted/30",
             isHighlighted && "border-primary/30",
             isSelectingHere && "bg-primary/5 border-primary/30",
           )}
-          style={continuousCorners}
         >
-          {resolved ? (
-            <ResolvedIndicator
-              entry={entry}
-              onCollapse={() => setExpanded(false)}
+          {resolved ? <ResolvedIndicator entry={entry} /> : null}
+          {entry.parent_id && parentEntry ? (
+            <ParentReference
+              entry={parentEntry}
+              onPress={() => onNavigateToParent?.(parentEntry.id)}
             />
+          ) : null}
+          {entry.parent_id && !parentEntry && parentUnavailable ? (
+            <View className="rounded-lg border border-dashed border-border/60 px-3 py-2">
+              <Text className="text-xs text-muted-foreground">
+                Original comment unavailable
+              </Text>
+            </View>
           ) : null}
           <CommentBody
             entry={entry}
@@ -187,125 +143,59 @@ export function CommentCard({
             issueIdentifier={issueIdentifier}
             onPressChange={handlePressChange}
           />
-          {/* A deleted reply renders nothing: its row is kept only so its own
-           *  replies keep a direct parent (#8296), and this list is flat, so
-           *  they already render in its place. Mirrors the reply list in
-           *  packages/views/issues/components/comment-card.tsx. A deleted ROOT
-           *  still renders its placeholder — it heads the thread. */}
-          {visibleReplies.map((reply) => (
-            <View key={reply.id} className="border-t border-border/60 pt-3">
-              <CommentBody
-                entry={reply}
-                issueId={issueId}
-                issueIdentifier={issueIdentifier}
-                onPressChange={handlePressChange}
-              />
-              <ReplyHighlightOverlay
-                active={highlightId === reply.id}
-              />
-            </View>
-          ))}
         </View>
-        <RootHighlightOverlay active={highlightId === entry.id} />
+        <RootHighlightOverlay active={highlightedCommentId === entry.id} />
       </View>
     </View>
   );
 }
 
-/**
- * Compact "thread is resolved" bar — substitutes the full card when a
- * resolved root is collapsed (default state). Tap anywhere to expand.
- *
- * Mirrors web's `<ResolvedThreadBar>` (`packages/views/issues/components/
- * resolved-thread-bar.tsx`): checkmark + N participant authors + reply
- * count + chevron. On mobile we drop the dedicated <Card> chrome and use
- * the same `bg-surface-1` bubble so the resolved bar reads as the same
- * "row" rhythm as the full card it stands in for.
- */
-function ResolvedThreadBar({
+function ParentReference({
   entry,
-  replies,
-  onExpand,
+  onPress,
 }: {
   entry: TimelineEntry;
-  replies: TimelineEntry[];
-  onExpand: () => void;
+  onPress: () => void;
 }) {
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
-
-  // Unique participant set across root + replies, preserving chronological
-  // order of first appearance. Up to two authors are named; the rest are
-  // rolled into "+N more" so the bar stays a single line on a narrow phone.
-  const authorsLabel = useMemo(() => {
-    const MAX_NAMED = 2;
-    const seen = new Set<string>();
-    const ordered: { type: string | null; id: string | null; name?: string }[] =
-      [];
-    for (const e of [entry, ...replies]) {
-      // A deleted comment names no author (mirrors web's useAuthorsLabel).
-      if (isDeletedComment(e)) continue;
-      const key = `${e.actor_type}:${e.actor_id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ordered.push({ type: e.actor_type, id: e.actor_id, name: e.actor_name });
-    }
-    const named = ordered
-      .slice(0, MAX_NAMED)
-      .map((a) =>
-        a.name ||
-        getName(a.type as "member" | "agent" | null | undefined, a.id),
-      )
-      .join(", ");
-    const remaining = ordered.length - MAX_NAMED;
-    return remaining > 0 ? `${named} +${remaining}` : named;
-  }, [entry, replies, getName]);
-
-  // Deleted replies render nothing when the thread expands, so the folded
-  // count must not promise them either.
-  const total = 1 + replies.filter((reply) => !isDeletedComment(reply)).length;
+  const author =
+    entry.actor_name ||
+    getName(
+      entry.actor_type as "member" | "agent" | null | undefined,
+      entry.actor_id,
+    );
+  const preview = stripMarkdown(entry.content ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   return (
-    <View className="px-4">
-      <Pressable
-        onPress={onExpand}
-        className="flex-row items-center gap-2.5 px-4 py-3 rounded-xl bg-surface-1 active:opacity-70"
-        style={continuousCorners}
-        accessibilityRole="button"
-        accessibilityLabel={`Resolved thread by ${authorsLabel}, ${total} ${total === 1 ? "message" : "messages"}. Tap to expand.`}
-      >
-        <Ionicons name="checkmark-circle" size={18} color={mutedFg} />
-        <Text
-          className="flex-1 text-sm text-muted-foreground"
-          numberOfLines={1}
-        >
-          Resolved · {total} {total === 1 ? "message" : "messages"} by{" "}
-          {authorsLabel}
+    <Pressable
+      onPress={onPress}
+      className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 active:opacity-70"
+      accessibilityRole="button"
+      accessibilityLabel={`Replying to ${author}. ${timeAgo(entry.created_at)}. ${preview}`}
+    >
+      <View className="flex-row items-center gap-1.5">
+        <Ionicons name="return-up-back" size={13} color={mutedFg} />
+        <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+          Replying to {author}
         </Text>
-        <Ionicons name="chevron-down" size={14} color={mutedFg} />
-      </Pressable>
-    </View>
+        <Text className="text-xs text-muted-foreground">
+          {timeAgo(entry.created_at)}
+        </Text>
+      </View>
+      {preview ? (
+        <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={2}>
+          {preview}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
-/**
- * Resolved indicator row that sits at the top of an expanded resolved
- * thread. Carries the "who resolved + when" attribution and a collapse
- * affordance — equivalent to web's "Mark as resolved" header bar
- * (`packages/views/issues/components/comment-card.tsx:519-532`).
- *
- * Tap collapses the thread back to the bar without firing the
- * <CommentBody> long-press action sheet (the row is a self-contained
- * Pressable, sits above CommentBody in the bubble's gap-3 layout).
- */
-function ResolvedIndicator({
-  entry,
-  onCollapse,
-}: {
-  entry: TimelineEntry;
-  onCollapse: () => void;
-}) {
+function ResolvedIndicator({ entry }: { entry: TimelineEntry }) {
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
@@ -315,11 +205,10 @@ function ResolvedIndicator({
   );
 
   return (
-    <Pressable
-      onPress={onCollapse}
-      className="flex-row items-center gap-2 active:opacity-60"
-      accessibilityRole="button"
-      accessibilityLabel="Collapse resolved thread"
+    <View
+      className="flex-row items-center gap-2"
+      accessibilityRole="text"
+      accessibilityLabel={`Resolved by ${resolverName}`}
     >
       <Ionicons name="checkmark-circle" size={14} color={mutedFg} />
       <Text className="text-xs text-muted-foreground flex-1" numberOfLines={1}>
@@ -329,14 +218,13 @@ function ResolvedIndicator({
         </Text>
         {entry.resolved_at ? ` · ${timeAgo(entry.resolved_at)}` : ""}
       </Text>
-      <Text className="text-xs text-muted-foreground">Collapse</Text>
-    </Pressable>
+    </View>
   );
 }
 
 /**
  * Animated highlight overlay for a root comment bubble. Sits absolute-
- * positioned over the parent <View className="rounded-xl">, no pointer
+ * positioned over the parent <View className="rounded-2xl">, no pointer
  * capture (long-press still works through it). Border + background wash
  * — equivalent to web's `ring-2 ring-brand/50 bg-brand/5`.
  *
@@ -366,34 +254,7 @@ function RootHighlightOverlay({ active }: { active: boolean }) {
   return (
     <Animated.View
       pointerEvents="none"
-      className="absolute inset-0 rounded-xl border-2 border-brand/50 bg-brand/5"
-      style={[continuousCorners, style]}
-    />
-  );
-}
-
-/**
- * Animated wash overlay for a reply row. Same timing as root, but no
- * border — mirrors web's reply branch which applies only `bg-brand/5`
- * (packages/views/issues/components/comment-card.tsx:682).
- */
-function ReplyHighlightOverlay({ active }: { active: boolean }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    if (!active) return;
-    progress.value = withSequence(
-      withTiming(1, { duration: 700 }),
-      withDelay(1800, withTiming(0, { duration: 700 })),
-    );
-  }, [active, progress]);
-
-  const style = useAnimatedStyle(() => ({ opacity: progress.value }));
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      className="absolute inset-0 bg-brand/5"
+      className="absolute inset-0 rounded-2xl border-2 border-brand/50 bg-brand/5"
       style={style}
     />
   );
@@ -415,9 +276,7 @@ function CommentBody({
   // routes to UIKit's native text-selection magnifier instead of our
   // gesture handler. Selection mode is exited via the Done pill, scrolling
   // the timeline, or unmounting the issue screen.
-  const isSelecting = useCommentSelectStore(
-    (s) => s.selectingId === entry.id,
-  );
+  const isSelecting = useCommentSelectStore((s) => s.selectingId === entry.id);
   const { getName } = useActorLookup();
   const userId = useAuthStore((s) => s.user?.id);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -507,18 +366,6 @@ function CommentBody({
     onPressChange?.(entry.id, longPress.isPressed);
   }, [longPress.isPressed, entry.id, isSelecting, onPressChange]);
 
-  if (isDeletedComment(entry)) {
-    // Only a deleted thread ROOT reaches this — the card filters deleted
-    // replies out. The root keeps a placeholder because its replies hang off
-    // it and the thread would otherwise have no head. Mirrors the root
-    // placeholder in packages/views/issues/components/comment-card.tsx.
-    return (
-      <Text className="text-sm italic text-muted-foreground">
-        This comment was deleted
-      </Text>
-    );
-  }
-
   const body = (
     <View className="gap-2">
       <View className="flex-row items-center gap-2">
@@ -593,10 +440,7 @@ function FailedActions({
   return (
     <View className="flex-row items-center gap-2 mt-0.5">
       <Ionicons name="alert-circle" size={14} color={destructive} />
-      <Text
-        className="flex-1 text-xs text-destructive"
-        numberOfLines={1}
-      >
+      <Text className="flex-1 text-xs text-destructive" numberOfLines={1}>
         {error || "Couldn't send"}
       </Text>
       <Pressable

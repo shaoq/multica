@@ -579,7 +579,9 @@
       "source_label": "{{name}} のコメント",
       "edit": "注釈 {{number}} を編集",
       "note_placeholder": "コメントを追加…"
-    }
+    },
+    "parent_reference": "{{author}} への返信",
+    "parent_unavailable": "元のコメントは表示できません"
   },
   "agent_activity": {
     "hover_header_other": "作業中のエージェント {{count}} 件",

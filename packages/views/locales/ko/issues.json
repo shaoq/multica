@@ -579,7 +579,9 @@
       "source_label": "{{name}}의 댓글",
       "edit": "주석 {{number}} 편집",
       "note_placeholder": "의견 추가…"
-    }
+    },
+    "parent_reference": "{{author}}님에게 답글",
+    "parent_unavailable": "원본 댓글을 표시할 수 없음"
   },
   "agent_activity": {
     "hover_header_other": "작업 중인 에이전트 {{count}}개",

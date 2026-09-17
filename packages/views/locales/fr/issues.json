@@ -595,7 +595,9 @@
       "source_label": "Commentaire de {{name}}",
       "edit": "Modifier l'annotation {{number}}",
       "note_placeholder": "Ajouter un commentaire…"
-    }
+    },
+    "parent_reference": "Réponse à {{author}}",
+    "parent_unavailable": "Commentaire d'origine indisponible"
   },
   "agent_activity": {
     "hover_header_one": "{{count}} agent actif",

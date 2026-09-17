@@ -579,7 +579,9 @@
       "source_label": "{{name}} 的评论",
       "edit": "编辑批注 {{number}}",
       "note_placeholder": "添加意见..."
-    }
+    },
+    "parent_reference": "回复 {{author}}",
+    "parent_unavailable": "原评论不可用"
   },
   "agent_activity": {
     "hover_header_other": "{{count}} 个智能体工作中",

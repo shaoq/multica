@@ -595,7 +595,9 @@
       "source_label": "Comment by {{name}}",
       "edit": "Edit annotation {{number}}",
       "note_placeholder": "Add a comment…"
-    }
+    },
+    "parent_reference": "Replying to {{author}}",
+    "parent_unavailable": "Original comment unavailable"
   },
   "agent_activity": {
     "hover_header_one": "{{count}} active agent",

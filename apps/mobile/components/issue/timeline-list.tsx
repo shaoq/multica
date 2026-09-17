@@ -96,7 +96,6 @@ import { IssueReactionRow } from "./issue-reaction-row";
 import { ActivityRow } from "./activity-row";
 import { CommentCard } from "./comment-card";
 import { useLastViewedStore } from "@/data/stores/last-viewed-store";
-import { coalesceTimeline } from "@/lib/timeline-coalesce";
 import { buildTimelineRows, type TimelineRow } from "@/lib/timeline-thread";
 import { ImageSequenceProvider } from "@/lib/markdown/image-sequence";
 import { issueAttachmentsOptions } from "@/data/queries/issues";
@@ -112,9 +111,7 @@ interface Props {
   timelineLoading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
-  /** Inbox deep-link target. Root comment id OR reply id — replies live
-   *  inline inside their parent's CommentCard, so a reply target scrolls
-   *  to the parent's row and the card highlights the matching child. */
+  /** Inbox deep-link target. Every comment and reply owns its own row ID. */
   highlightCommentId?: string;
   /** Per-tap nonce. Re-tapping the same inbox row produces the same
    *  `highlightCommentId` but a fresh nonce, which re-triggers the
@@ -153,19 +150,15 @@ export function TimelineList({
   // passes through to comment cards / chip rows / reactions normally.
   const selectingId = useCommentSelectStore((s) => s.selectingId);
 
-  // Server already returns ASC oldest-first. Pipeline:
-  //   1. coalesceTimeline → merge consecutive identical activities
-  //   2. buildTimelineRows → reorder so replies sit adjacent to their parent
-  //      and tag each reply with `replyTo` for the card to render the
-  //      "↪ Replying to" header + thread-line border. This is the mobile
-  //      flat-list interpretation of web's recursive reply tree.
+  // Shared canonical model sorts persisted entries globally, coalesces only
+  // adjacent compatible activities, and resolves direct parent context.
   const data = useMemo<TimelineRow[]>(() => {
     if (!entries) return [];
-    return buildTimelineRows(coalesceTimeline(entries));
+    return buildTimelineRows(entries);
   }, [entries]);
 
   // Every image on this screen, in render order: the description first, then
-  // each comment row with its replies (MUL-5752). Tapping any of them opens
+  // each flat comment row (MUL-5752). Tapping any of them opens
   // the lightbox at its real position so a swipe walks to the next.
   //
   // The description's attachments come from the same query IssueDescription
@@ -184,9 +177,6 @@ export function TimelineList({
         content: row.entry.content,
         attachments: row.entry.attachments,
       });
-      for (const reply of row.replies) {
-        blocks.push({ content: reply.content, attachments: reply.attachments });
-      }
     }
     return blocks;
   }, [issue.description, issueAttachments, data]);
@@ -195,6 +185,7 @@ export function TimelineList({
   // Gates single-shot per (commentId, nonce) tuple. Re-tap from inbox
   // bumps the nonce → ref no longer matches → effect re-fires.
   const lastStampRef = useRef<string | null>(null);
+  const lastScrollStampRef = useRef<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   // ── "New since last view" divider ─────────────────────────────────────
@@ -288,10 +279,40 @@ export function TimelineList({
         actor_type: "",
         actor_id: "",
       } as unknown as TimelineEntry,
-      replies: [],
+      parent: null,
+      parentUnavailable: false,
     };
     return [...data.slice(0, anchorIdx), divider, ...data.slice(anchorIdx)];
   }, [data, dividerAnchorId]);
+
+  const jumpToComment = useCallback(
+    (commentId: string, animated = true) => {
+      const index = dataWithDivider.findIndex(
+        (row) => row.entry.id === commentId,
+      );
+      if (index < 0) return;
+      listRef.current?.scrollToIndex({
+        index,
+        animated,
+        viewPosition: 0.25,
+      });
+      setHighlightedId(commentId);
+    },
+    [dataWithDivider],
+  );
+
+  // Replies are independent rows, so inbox links and parent-reference taps
+  // target the real persisted comment ID instead of an enclosing thread root.
+  useEffect(() => {
+    if (!highlightCommentId || dataWithDivider.length === 0) return;
+    const stamp = `${highlightCommentId}:${highlightNonce ?? ""}`;
+    if (lastScrollStampRef.current === stamp) return;
+    lastScrollStampRef.current = stamp;
+    const frame = requestAnimationFrame(() =>
+      jumpToComment(highlightCommentId, false),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [highlightCommentId, highlightNonce, dataWithDivider.length, jumpToComment]);
 
   // Mark "scrolled past" once the divider row leaves the viewport — used
   // by the unmount effect below to decide whether to bump last-viewed.
@@ -447,7 +468,9 @@ export function TimelineList({
           return item.entry.type === "comment" ? (
             <CommentCard
               entry={item.entry}
-              replies={item.replies}
+              parentEntry={item.parent}
+              parentUnavailable={item.parentUnavailable}
+              onNavigateToParent={jumpToComment}
               issueId={issue.id}
               issueIdentifier={issue.identifier}
               highlightedCommentId={highlightedId}
