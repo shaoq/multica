@@ -66,8 +66,12 @@ import {
 } from "../editor/utils/link-handler";
 import { preprocessMarkdown } from "../editor/utils/preprocess";
 import { highlightToHtml } from "../editor/utils/highlight-markdown";
-import { AttachmentDownloadProvider } from "../editor/attachment-download-context";
+import {
+  AttachmentDownloadProvider,
+  useAttachmentDownloadResolver,
+} from "../editor/attachment-download-context";
 import { Attachment as AttachmentRenderer } from "../editor/attachment";
+import { useAttachmentPreview } from "../editor/attachment-preview-modal";
 import { computeClosedFenceOffsets } from "./streaming-fence";
 import { remarkRepairCjkStrongTrailingWhitespace } from "./cjk-emphasis";
 import {
@@ -206,6 +210,8 @@ function unfurlableEntityLink(
 function RichLink({ href, children }: { href?: string; children?: ReactNode }) {
   const slug = useWorkspaceSlug();
   const appOrigin = useAppOrigin();
+  const attachmentResolver = useAttachmentDownloadResolver();
+  const attachmentPreview = useAttachmentPreview();
   // Platform probe only: `openInNewTab` present means desktop, where native
   // anchor behavior is a dead end and every click must be intercepted. Absent
   // (web), modified clicks are left to the browser — the only way to get a
@@ -236,6 +242,46 @@ function RichLink({ href, children }: { href?: string; children?: ReactNode }) {
     }
     // Member / agent / all mentions
     return <span className="mention">{children}</span>;
+  }
+
+  // A normal Markdown link can still point at an attachment owned by the
+  // surrounding comment / issue / chat message. Treat that relationship as
+  // product metadata, not as an ordinary external URL: a primary click opens
+  // the existing authenticated preview modal, which renders Markdown through
+  // ReadonlyContent and therefore avoids Chrome's download + quarantine path.
+  //
+  // Keep the real href on the anchor. It remains the progressive-enhancement
+  // fallback (JS disabled, context-menu save/copy), while the modal exposes an
+  // explicit Download action as the secondary path. Unknown and unsupported
+  // attachment links continue through the regular openLink policy below.
+  const linkedAttachment = href
+    ? attachmentResolver.resolveAttachment(href)
+    : undefined;
+  if (href && linkedAttachment) {
+    return (
+      <>
+        <a
+          href={href}
+          onClick={(e) => {
+            if (
+              attachmentPreview.tryOpen({
+                kind: "full",
+                attachment: linkedAttachment,
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            e.preventDefault();
+            openLink(href, slug, appOrigin, resolveClickIntent(e));
+          }}
+        >
+          {children}
+        </a>
+        {attachmentPreview.modal}
+      </>
+    );
   }
 
   // Regular link — open directly on click. A URL pointing back at this

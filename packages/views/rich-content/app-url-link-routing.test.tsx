@@ -10,10 +10,24 @@
  * nothing about the routing decision.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { Attachment } from "@multica/core/types";
 
 const APP_ORIGIN = "https://app.example";
+
+const { getAttachmentTextContentMock } = vi.hoisted(() => ({
+  getAttachmentTextContentMock: vi.fn(),
+}));
+
+vi.mock("@multica/core/api", () => ({
+  api: {
+    getAttachmentTextContent: getAttachmentTextContentMock,
+    getBaseUrl: () => "",
+  },
+  PreviewTooLargeError: class extends Error {},
+  PreviewUnsupportedError: class extends Error {},
+}));
 
 vi.mock("../issues/hooks", () => ({
   useResolveIssueIdentifier: () => null,
@@ -70,13 +84,13 @@ function captureNavigate(e: Event) {
   if (path) navigatedPaths.push(path);
 }
 
-function renderContent(content: string) {
+function renderContent(content: string, attachments?: Attachment[]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <RichContent content={content} />
+      <RichContent content={content} attachments={attachments} />
     </QueryClientProvider>,
   );
 }
@@ -117,6 +131,42 @@ describe("RichContent link routing", () => {
       "_blank",
       "noopener,noreferrer",
     );
+  });
+
+  it("opens a known Markdown attachment link in the inline preview instead of downloading it", async () => {
+    const id = "11111111-2222-4333-8444-555555555555";
+    const download = `${APP_ORIGIN}/api/attachments/${id}/download`;
+    const attachment: Attachment = {
+      id,
+      workspace_id: "workspace-1",
+      issue_id: "issue-1",
+      comment_id: "comment-1",
+      chat_session_id: null,
+      chat_message_id: null,
+      uploader_type: "agent",
+      uploader_id: "agent-1",
+      filename: "ARCH-DESIGN-v1.md",
+      url: download,
+      download_url: download,
+      markdown_url: download,
+      content_type: "text/markdown",
+      size_bytes: 128,
+      created_at: "2026-08-31T00:00:00Z",
+    };
+    getAttachmentTextContentMock.mockResolvedValueOnce({
+      text: "# 完整架构设计\n\n这是可供审核的方案正文。",
+      originalContentType: "text/markdown",
+    });
+
+    renderContent(`[完整 Design](${download})`, [attachment]);
+
+    screen.getByText("完整 Design").click();
+
+    await waitFor(() => {
+      expect(getAttachmentTextContentMock).toHaveBeenCalledWith(id);
+    });
+    expect(await screen.findByText("完整架构设计")).toBeTruthy();
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it("keeps a same-origin /uploads file external — the backend serves it, not the router", () => {
